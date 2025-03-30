@@ -12,24 +12,15 @@ module Anthro
     DAYS_PER_MONTH = 30.4375
 
     def self.load_reference_data
-      @reference_data ||= begin
-        data = {}
-
-        Anthro::DATA.keys.each do |measurement|
-          data[measurement] = { m: {}, f: {} }
-          Anthro::DATA[measurement].keys.each do |source|
-            Anthro::DATA[measurement][source].each do |sex, month, l, m, s|
-              sex = sex == 1 ? :m : :f
-              data[measurement][sex][month.to_f] = {
-                l: l,
-                m: m,
-                s: s
-              }
+      @reference_data ||= Anthro::DATA.transform_values do |sources|
+        { m: {}, f: {} }.tap do |sex_data|
+          sources.each do |source, entries|
+            entries.each do |sex, month, l, m, s|
+              sex_key = sex == 1 ? :m : :f
+              sex_data[sex_key][month.to_f] = { l: l, m: m, s: s }
             end
           end
         end
-
-        data
       end
     end
 
