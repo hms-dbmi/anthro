@@ -85,12 +85,65 @@ class TestReferenceData < Minitest::Test
   end
 
   def test_clear_reference_data_cache
-    first_data = Anthro.reference_data
-    Anthro.send(:clear_reference_data_cache!)
-    second_data = Anthro.reference_data
+    # First access to create cache
+    original_data = Anthro.reference_data
+    original_object_id = original_data.object_id
 
-    refute_equal first_data.object_id, second_data.object_id,
-                 "After clearing cache, should get different object"
+    # Clear the cache
+    Anthro.send(:clear_reference_data_cache!)
+
+    # Get new data after clearing cache
+    new_data = Anthro.reference_data
+    new_object_id = new_data.object_id
+
+    # Test that we got a different object (cache was cleared)
+    refute_equal original_object_id, new_object_id,
+                 "After clearing cache, should get a different object"
+
+    # Verify data is still valid after cache clear
+    assert_instance_of Hash, new_data
+    assert new_data.key?(:weight_for_age)
+    assert new_data[:weight_for_age].key?(:m)
+    assert new_data[:weight_for_age].key?(:f)
+  end
+
+  def test_clear_reference_data_cache_thread_safety
+    # Create threads that alternate between reading and clearing cache
+    reader_threads = []
+    clearer_threads = []
+    errors = []
+
+    5.times do
+      reader_threads << Thread.new do
+        3.times do
+          data = Anthro.reference_data
+          assert_instance_of Hash, data
+          sleep 0.01 # Small delay to increase chance of thread interleaving
+        end
+      rescue StandardError => e
+        errors << e
+      end
+
+      clearer_threads << Thread.new do
+        3.times do
+          Anthro.send(:clear_reference_data_cache!)
+          sleep 0.01
+        end
+      rescue StandardError => e
+        errors << e
+      end
+    end
+
+    # Wait for all threads to complete
+    (reader_threads + clearer_threads).each(&:join)
+
+    # Check if any errors occurred during threaded operation
+    assert_empty errors, "Thread operations should complete without errors"
+
+    # Verify data is still valid after concurrent operations
+    final_data = Anthro.reference_data
+    assert_instance_of Hash, final_data
+    assert final_data.key?(:weight_for_age)
   end
 
   def test_data_consistency
