@@ -5,14 +5,14 @@ require_relative "anthro/version"
 require_relative "anthro/data"
 
 module Anthro
-  class Calculator
-    VALID_MEASUREMENTS = DATA.keys.freeze
-    VALID_SEXES = %w[male female m f].freeze
-    AGE_RANGE_MONTHS = (0..240)
-    DAYS_PER_MONTH = 30.4375
+  @reference_data_mutex = Mutex.new
+  @reference_data = nil
 
-    def self.load_reference_data
-      @reference_data ||= Anthro::DATA.transform_values do |sources|
+  def self.reference_data
+    return @reference_data if @reference_data
+
+    @reference_data_mutex.synchronize do
+      @reference_data ||= DATA.transform_values do |sources|
         { m: {}, f: {} }.tap do |sex_data|
           sources.each do |source, entries|
             entries.each do |sex, month, l, m, s|
@@ -21,8 +21,23 @@ module Anthro
             end
           end
         end
-      end
+      end.freeze
     end
+  end
+
+  def self.clear_reference_data_cache!
+    @reference_data_mutex.synchronize do
+      @reference_data = nil
+    end
+  end
+
+  private_class_method :clear_reference_data_cache!
+
+  class Calculator
+    VALID_MEASUREMENTS = DATA.keys.freeze
+    VALID_SEXES = %w[male female m f].freeze
+    AGE_RANGE_MONTHS = (0..240)
+    DAYS_PER_MONTH = 30.4375
 
     attr_reader :z_score, :percentile
 
@@ -30,7 +45,7 @@ module Anthro
       @measurement_type = measurement_type.to_sym
       @sex = sex[0].downcase
       @value = value.to_f
-      @reference_data = self.class.load_reference_data
+      @reference_data = Anthro.reference_data # Use module-level cached data
 
       raise ArgumentError, "Specify either age_months or age_days, not both" if age_months && age_days
       raise ArgumentError, "Either age_months or age_days must be provided" unless age_months || age_days
