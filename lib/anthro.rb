@@ -17,10 +17,12 @@ module Anthro
           sources.each do |source, entries|
             entries.each do |sex, month, l, m, s|
               sex_key = sex == 1 ? :m : :f
-              sex_data[sex_key][month.to_f] = { l: l, m: m, s: s }
+              sex_data[sex_key][month.to_f] = { l: l, m: m, s: s }.freeze
             end
           end
-        end
+          sex_data[:m].freeze
+          sex_data[:f].freeze
+        end.freeze
       end.freeze
     end
   end
